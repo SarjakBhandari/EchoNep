@@ -82,11 +82,7 @@ class TranslationNotifier extends StateNotifier<TranslationState> {
   final HealthCheckUseCase _healthCheckUseCase;
 
   void setLoading({String sourceText = ''}) {
-    state = state.copyWith(
-      isLoading: true,
-      error: null,
-      sourceText: sourceText,
-    );
+    state = state.copyWith(isLoading: true, sourceText: sourceText);
   }
 
   void setError(String message) {
@@ -96,7 +92,6 @@ class TranslationNotifier extends StateNotifier<TranslationState> {
   void setResult(TranslationResult result) {
     state = state.copyWith(
       isLoading: false,
-      error: null,
       result: result,
       sourceText: result.sourceText,
     );

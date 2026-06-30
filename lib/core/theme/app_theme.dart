@@ -130,10 +130,7 @@ class AppTheme {
     const palette = AppPalette.light;
     return ThemeData(
       brightness: Brightness.light,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: seedColor,
-        brightness: Brightness.light,
-      ),
+      colorScheme: ColorScheme.fromSeed(seedColor: seedColor),
       scaffoldBackgroundColor: palette.gradientStart,
       useMaterial3: true,
       textTheme: _textTheme(palette.textPrimary),
