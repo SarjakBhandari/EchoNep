@@ -405,7 +405,10 @@ class _QuickPhraseStrip extends StatelessWidget {
           role == UserRole.tourist
               ? 'Buyer-friendly phrases for fast translation.'
               : 'Seller-side phrases tailored for the trader desk.',
-          style: GoogleFonts.manrope(fontSize: 12, color: palette.textSecondary),
+          style: GoogleFonts.manrope(
+            fontSize: 12,
+            color: palette.textSecondary,
+          ),
         ),
         const SizedBox(height: 10),
         Wrap(
@@ -496,7 +499,10 @@ class _ComposerCard extends StatelessWidget {
             role == UserRole.trader
                 ? 'Speak Nepali in Devanagari. The transcript stays here until you tap Translate.'
                 : 'Type your text or use the mic, then translate when ready.',
-            style: GoogleFonts.manrope(fontSize: 12, color: palette.textSecondary),
+            style: GoogleFonts.manrope(
+              fontSize: 12,
+              color: palette.textSecondary,
+            ),
           ),
           const SizedBox(height: 10),
           TextField(
@@ -645,7 +651,10 @@ class _ResultCard extends StatelessWidget {
             const SizedBox(height: 10),
             Text(
               'Translate: ${result.latencyMs['translate'] ?? 0} ms - ASR: ${result.latencyMs['asr'] ?? 0} ms - TTS: ${result.latencyMs['tts'] ?? 0} ms',
-              style: GoogleFonts.manrope(fontSize: 11, color: palette.textSecondary),
+              style: GoogleFonts.manrope(
+                fontSize: 11,
+                color: palette.textSecondary,
+              ),
             ),
           ],
         ),
@@ -704,7 +713,10 @@ class _MicBarState extends State<_MicBar> with SingleTickerProviderStateMixin {
           const SizedBox(height: 4),
           Text(
             widget.hint,
-            style: GoogleFonts.manrope(color: palette.textSecondary, fontSize: 12),
+            style: GoogleFonts.manrope(
+              color: palette.textSecondary,
+              fontSize: 12,
+            ),
           ),
           const SizedBox(height: 14),
           GestureDetector(
@@ -747,19 +759,25 @@ class _MicBarState extends State<_MicBar> with SingleTickerProviderStateMixin {
                             ? [Colors.grey.shade500, Colors.grey.shade700]
                             : widget.isRecording
                             ? [Colors.red.shade400, Colors.red.shade700]
-                            : [widget.accent, widget.accent.withValues(alpha: 0.72)],
+                            : [
+                                widget.accent,
+                                widget.accent.withValues(alpha: 0.72),
+                              ],
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: (widget.isRecording ? Colors.red : widget.accent)
-                              .withValues(alpha: 0.35),
+                          color:
+                              (widget.isRecording ? Colors.red : widget.accent)
+                                  .withValues(alpha: 0.35),
                           blurRadius: 22,
                           offset: const Offset(0, 10),
                         ),
                       ],
                     ),
                     child: Icon(
-                      widget.isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                      widget.isRecording
+                          ? Icons.stop_rounded
+                          : Icons.mic_rounded,
                       color: Colors.white,
                       size: 34,
                     ),
@@ -832,7 +850,10 @@ class _WorkspaceHeader extends StatelessWidget {
       showBorder: false,
       shadowOpacity: 0.22,
       gradient: LinearGradient(
-        colors: [accent.withValues(alpha: 0.95), accent.withValues(alpha: 0.72)],
+        colors: [
+          accent.withValues(alpha: 0.95),
+          accent.withValues(alpha: 0.72),
+        ],
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
       ),
