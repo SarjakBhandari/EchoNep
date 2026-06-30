@@ -1,6 +1,8 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../models/translation_result.dart';
+import '../utils/api_error.dart';
 import '../../features/translation/data/datasources/translation_remote_data_source.dart';
 import '../../features/translation/data/repositories/translation_repository_impl.dart';
 import '../../features/translation/domain/usecases/health_check_usecase.dart';
@@ -115,6 +117,8 @@ class TranslationNotifier extends StateNotifier<TranslationState> {
         direction: direction,
       );
       setResult(result);
+    } on DioException catch (error) {
+      setError(describeDioError(error));
     } catch (error) {
       setError(error.toString());
     }
@@ -131,6 +135,8 @@ class TranslationNotifier extends StateNotifier<TranslationState> {
         direction: direction,
       );
       setResult(result);
+    } on DioException catch (error) {
+      setError(describeDioError(error));
     } catch (error) {
       setError(error.toString());
     }
