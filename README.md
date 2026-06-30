@@ -1,6 +1,6 @@
-# echo_nep
+# np_en_translator
 
-Nepalii to English voice language translator
+A new Flutter project.
 
 ## Getting Started
 

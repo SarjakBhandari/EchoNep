@@ -3,17 +3,23 @@ import 'dart:io';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:dio/dio.dart';
-import 'package:echo_nep/core/models/quick_phrase.dart';
-import 'package:echo_nep/core/models/translation_result.dart';
-import 'package:echo_nep/core/models/user_role.dart';
-import 'package:echo_nep/core/providers/role_provider.dart';
-import 'package:echo_nep/core/providers/translation_provider.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
+
+import '../../core/models/quick_phrase.dart';
+import '../../core/models/translation_result.dart';
+import '../../core/models/user_role.dart';
+import '../../core/providers/role_provider.dart';
+import '../../core/providers/theme_provider.dart';
+import '../../core/providers/translation_provider.dart';
+import '../../core/theme/app_theme.dart';
+import '../../core/utils/api_error.dart';
+import '../../core/widgets/app_card.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   final UserRole role;
@@ -48,6 +54,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _pickPhrase(QuickPhrase phrase) async {
     if (_isBusy) return;
+    HapticFeedback.selectionClick();
     final sourceText = widget.role == UserRole.tourist
         ? phrase.english
         : phrase.nepali;
@@ -57,6 +64,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   Future<void> _translateText(String sourceText) async {
     if (_isBusy || sourceText.isEmpty) return;
+    HapticFeedback.lightImpact();
     setState(() {
       _isBusy = true;
     });
@@ -80,6 +88,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _toggleRecording() async {
     if (_isBusy) return;
     if (_isRecording) {
+      HapticFeedback.mediumImpact();
       await _stopRecordingAndTranslate();
       return;
     }
@@ -100,6 +109,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       path: _recordingPath!,
     );
 
+    HapticFeedback.mediumImpact();
     setState(() {
       _isRecording = true;
     });
@@ -143,7 +153,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
             .setError(
               error.type == DioExceptionType.receiveTimeout
                   ? 'ASR is taking too long. Please record a shorter phrase or try again.'
-                  : 'ASR failed: ${error.message ?? 'unknown error'}',
+                  : describeDioError(error),
             );
       }
     } catch (error) {
@@ -160,6 +170,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _playAudio(String audioB64) async {
+    HapticFeedback.lightImpact();
     final audioBytes = base64Decode(audioB64);
     final tempDirectory = await getTemporaryDirectory();
     final isWav =
@@ -176,14 +187,16 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final translationState = ref.watch(translationProvider);
+    final themeMode = ref.watch(themeModeProvider);
+    final palette = context.palette;
 
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(
+        decoration: BoxDecoration(
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [Color(0xFFFFFCF5), Color(0xFFF5E8D8)],
+            colors: [palette.gradientStart, palette.gradientMid],
           ),
         ),
         child: SafeArea(
@@ -192,9 +205,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               _TopBar(
                 role: widget.role,
                 accent: _accent,
+                themeMode: themeMode,
                 onReset: _isBusy
                     ? null
                     : () => ref.read(roleProvider.notifier).clearRole(),
+                onToggleTheme: () =>
+                    ref.read(themeModeProvider.notifier).cycleThemeMode(),
               ),
               Expanded(
                 child: SingleChildScrollView(
@@ -238,7 +254,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       if (translationState.error != null)
                         _StatusBanner(
                           message: translationState.error!,
-                          color: Colors.red.shade700,
+                          color: palette.errorColor,
                         ),
                       if (translationState.result != null) ...[
                         const SizedBox(height: 16),
@@ -271,19 +287,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
+IconData _themeModeIcon(ThemeMode mode) {
+  return switch (mode) {
+    ThemeMode.system => Icons.brightness_auto_rounded,
+    ThemeMode.light => Icons.light_mode_rounded,
+    ThemeMode.dark => Icons.dark_mode_rounded,
+  };
+}
+
+String _themeModeTooltip(ThemeMode mode) {
+  return switch (mode) {
+    ThemeMode.system => 'Theme: system (tap for light)',
+    ThemeMode.light => 'Theme: light (tap for dark)',
+    ThemeMode.dark => 'Theme: dark (tap for system)',
+  };
+}
+
 class _TopBar extends StatelessWidget {
   final UserRole role;
   final Color accent;
+  final ThemeMode themeMode;
   final VoidCallback? onReset;
+  final VoidCallback onToggleTheme;
 
   const _TopBar({
     required this.role,
     required this.accent,
+    required this.themeMode,
     required this.onReset,
+    required this.onToggleTheme,
   });
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
       child: Row(
@@ -291,7 +328,7 @@ class _TopBar extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: accent.withOpacity(0.1),
+              color: accent.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(18),
             ),
             child: Row(
@@ -316,9 +353,15 @@ class _TopBar extends StatelessWidget {
           ),
           const Spacer(),
           IconButton(
+            onPressed: onToggleTheme,
+            icon: Icon(_themeModeIcon(themeMode)),
+            color: palette.textPrimary,
+            tooltip: _themeModeTooltip(themeMode),
+          ),
+          IconButton(
             onPressed: onReset,
             icon: const Icon(Icons.swap_horiz_rounded),
-            color: const Color(0xFF062A3A),
+            color: palette.textPrimary,
             tooltip: 'Reset role',
           ),
         ],
@@ -342,6 +385,7 @@ class _QuickPhraseStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     final phrases = role == UserRole.tourist
         ? touristQuickPhrases
         : traderQuickPhrases;
@@ -353,7 +397,7 @@ class _QuickPhraseStrip extends StatelessWidget {
           role == UserRole.tourist ? 'Quick phrases' : 'Seller shortcuts',
           style: GoogleFonts.manrope(
             fontWeight: FontWeight.w800,
-            color: const Color(0xFF062A3A),
+            color: palette.textPrimary,
           ),
         ),
         const SizedBox(height: 4),
@@ -361,10 +405,7 @@ class _QuickPhraseStrip extends StatelessWidget {
           role == UserRole.tourist
               ? 'Buyer-friendly phrases for fast translation.'
               : 'Seller-side phrases tailored for the trader desk.',
-          style: GoogleFonts.manrope(
-            fontSize: 12,
-            color: const Color(0xFF6B6B6B),
-          ),
+          style: GoogleFonts.manrope(fontSize: 12, color: palette.textSecondary),
         ),
         const SizedBox(height: 10),
         Wrap(
@@ -378,7 +419,7 @@ class _QuickPhraseStrip extends StatelessWidget {
             return ActionChip(
               avatar: CircleAvatar(
                 radius: 12,
-                backgroundColor: Colors.white,
+                backgroundColor: palette.surfaceCard,
                 child: Icon(
                   phrase.icon, // IconData on QuickPhrase
                   size: 16,
@@ -390,11 +431,11 @@ class _QuickPhraseStrip extends StatelessWidget {
                 label,
                 style: GoogleFonts.manrope(
                   fontWeight: FontWeight.w600,
-                  color: Colors.black,
+                  color: palette.textPrimary,
                 ),
               ),
-              backgroundColor: Colors.white,
-              side: BorderSide(color: accent.withOpacity(0.18)),
+              backgroundColor: palette.surfaceCard,
+              side: BorderSide(color: accent.withValues(alpha: 0.18)),
               onPressed: enabled ? () => onPhraseTap(phrase) : null,
               elevation: 0,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
@@ -423,21 +464,10 @@ class _ComposerCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFFFBF5),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: accent.withOpacity(0.14)),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withOpacity(0.08),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
-      ),
+    final palette = context.palette;
+    return AppCard(
+      accent: accent,
+      borderOpacity: 0.14,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -456,7 +486,7 @@ class _ComposerCard extends StatelessWidget {
                 role == UserRole.tourist ? 'Input desk' : 'Seller form',
                 style: GoogleFonts.manrope(
                   fontWeight: FontWeight.w800,
-                  color: const Color(0xFF062A3A),
+                  color: palette.textPrimary,
                 ),
               ),
             ],
@@ -466,22 +496,20 @@ class _ComposerCard extends StatelessWidget {
             role == UserRole.trader
                 ? 'Speak Nepali in Devanagari. The transcript stays here until you tap Translate.'
                 : 'Type your text or use the mic, then translate when ready.',
-            style: GoogleFonts.manrope(
-              fontSize: 12,
-              color: const Color(0xFF6B6B6B),
-            ),
+            style: GoogleFonts.manrope(fontSize: 12, color: palette.textSecondary),
           ),
           const SizedBox(height: 10),
           TextField(
             controller: controller,
             maxLines: 4,
             textInputAction: TextInputAction.done,
+            style: GoogleFonts.manrope(color: palette.textPrimary),
             decoration: InputDecoration(
               hintText: role == UserRole.trader
                   ? 'उदाहरण: यो अन्तिम मूल्य हो'
                   : role.prompt,
               filled: true,
-              fillColor: const Color(0xFFFFF7EF),
+              fillColor: palette.surfaceCardAlt,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(18),
                 borderSide: BorderSide.none,
@@ -519,14 +547,13 @@ class _StatusBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    return AppCard(
+      accent: color,
+      fillColor: color.withValues(alpha: 0.08),
+      borderOpacity: 0.18,
+      radius: AppRadius.md,
+      withShadow: false,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: color.withOpacity(0.18)),
-      ),
       child: Text(message, style: GoogleFonts.manrope(color: color)),
     );
   }
@@ -547,78 +574,87 @@ class _ResultCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: accent.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: accent.withOpacity(0.18)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            role.outputLabel,
-            style: GoogleFonts.manrope(
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF5A5A5A),
-            ),
+    final palette = context.palette;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0, end: 1),
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeOut,
+      builder: (context, value, child) {
+        return Opacity(
+          opacity: value,
+          child: Transform.translate(
+            offset: Offset(0, (1 - value) * 16),
+            child: child,
           ),
-          const SizedBox(height: 10),
-          Text(
-            result.translatedText,
-            style: GoogleFonts.notoSansDevanagari(
-              fontSize: 24,
-              fontWeight: FontWeight.w700,
-              color: const Color(0xFF062A3A),
-            ),
-          ),
-          if (result.romanizedText.isNotEmpty) ...[
-            const SizedBox(height: 8),
+        );
+      },
+      child: AppCard(
+        accent: accent,
+        fillColor: accent.withValues(alpha: 0.08),
+        borderOpacity: 0.18,
+        withShadow: false,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              result.romanizedText,
+              role.outputLabel,
               style: GoogleFonts.manrope(
-                fontSize: 15,
-                fontStyle: FontStyle.italic,
-                color: const Color(0xFF6B6B6B),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: palette.textSecondary,
               ),
             ),
-          ],
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: FilledButton.icon(
-                  onPressed: result.audioB64.isEmpty
-                      ? null
-                      : () => onPlay(result.audioB64),
-                  icon: const Icon(Icons.volume_up_rounded),
-                  label: const Text('Play'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: accent,
-                    foregroundColor: Colors.white,
-                  ),
+            const SizedBox(height: 10),
+            Text(
+              result.translatedText,
+              style: GoogleFonts.notoSansDevanagari(
+                fontSize: 24,
+                fontWeight: FontWeight.w700,
+                color: palette.textPrimary,
+              ),
+            ),
+            if (result.romanizedText.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                result.romanizedText,
+                style: GoogleFonts.manrope(
+                  fontSize: 15,
+                  fontStyle: FontStyle.italic,
+                  color: palette.textSecondary,
                 ),
               ),
             ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Translate: ${result.latencyMs['translate'] ?? 0} ms · ASR: ${result.latencyMs['asr'] ?? 0} ms · TTS: ${result.latencyMs['tts'] ?? 0} ms',
-            style: GoogleFonts.manrope(
-              fontSize: 11,
-              color: const Color(0xFF6B6B6B),
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                Expanded(
+                  child: FilledButton.icon(
+                    onPressed: result.audioB64.isEmpty
+                        ? null
+                        : () => onPlay(result.audioB64),
+                    icon: const Icon(Icons.volume_up_rounded),
+                    label: const Text('Play'),
+                    style: FilledButton.styleFrom(
+                      backgroundColor: accent,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ),
-        ],
+            const SizedBox(height: 10),
+            Text(
+              'Translate: ${result.latencyMs['translate'] ?? 0} ms - ASR: ${result.latencyMs['asr'] ?? 0} ms - TTS: ${result.latencyMs['tts'] ?? 0} ms',
+              style: GoogleFonts.manrope(fontSize: 11, color: palette.textSecondary),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-class _MicBar extends StatelessWidget {
+class _MicBar extends StatefulWidget {
   final Color accent;
   final bool isRecording;
   final bool enabled;
@@ -636,56 +672,99 @@ class _MicBar extends StatelessWidget {
   });
 
   @override
+  State<_MicBar> createState() => _MicBarState();
+}
+
+class _MicBarState extends State<_MicBar> with SingleTickerProviderStateMixin {
+  late final AnimationController _pulseController = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1200),
+  )..repeat();
+
+  @override
+  void dispose() {
+    _pulseController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final palette = context.palette;
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       child: Column(
         children: [
           Text(
-            label,
+            widget.label,
             style: GoogleFonts.manrope(
-              color: const Color(0xFF5A5A5A),
+              color: palette.textSecondary,
               fontWeight: FontWeight.w700,
             ),
           ),
           const SizedBox(height: 4),
           Text(
-            hint,
-            style: GoogleFonts.manrope(
-              color: const Color(0xFF6B6B6B),
-              fontSize: 12,
-            ),
+            widget.hint,
+            style: GoogleFonts.manrope(color: palette.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 14),
           GestureDetector(
-            onTap: enabled ? onTap : null,
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 180),
-              width: isRecording ? 86 : 74,
-              height: isRecording ? 86 : 74,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                gradient: LinearGradient(
-                  colors: !enabled
-                      ? [Colors.grey.shade500, Colors.grey.shade700]
-                      : isRecording
-                      ? [Colors.red.shade400, Colors.red.shade700]
-                      : [accent, accent.withOpacity(0.72)],
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: (isRecording ? Colors.red : accent).withOpacity(
-                      0.35,
+            onTap: widget.enabled ? widget.onTap : null,
+            child: SizedBox(
+              width: 110,
+              height: 110,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (widget.isRecording)
+                    AnimatedBuilder(
+                      animation: _pulseController,
+                      builder: (context, child) {
+                        final t = _pulseController.value;
+                        return Opacity(
+                          opacity: (1 - t) * 0.45,
+                          child: Transform.scale(
+                            scale: 1.0 + t * 0.6,
+                            child: Container(
+                              width: 86,
+                              height: 86,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: Colors.red,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
-                    blurRadius: 22,
-                    offset: const Offset(0, 10),
+                  AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: widget.isRecording ? 86 : 74,
+                    height: widget.isRecording ? 86 : 74,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: LinearGradient(
+                        colors: !widget.enabled
+                            ? [Colors.grey.shade500, Colors.grey.shade700]
+                            : widget.isRecording
+                            ? [Colors.red.shade400, Colors.red.shade700]
+                            : [widget.accent, widget.accent.withValues(alpha: 0.72)],
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (widget.isRecording ? Colors.red : widget.accent)
+                              .withValues(alpha: 0.35),
+                          blurRadius: 22,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: Icon(
+                      widget.isRecording ? Icons.stop_rounded : Icons.mic_rounded,
+                      color: Colors.white,
+                      size: 34,
+                    ),
                   ),
                 ],
-              ),
-              child: Icon(
-                isRecording ? Icons.stop_rounded : Icons.mic_rounded,
-                color: Colors.white,
-                size: 34,
               ),
             ),
           ),
@@ -703,14 +782,13 @@ class _BusyBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
+    return AppCard(
+      accent: accent,
+      fillColor: accent.withValues(alpha: 0.08),
+      borderOpacity: 0.18,
+      radius: AppRadius.md,
+      withShadow: false,
       padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: accent.withOpacity(0.08),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: accent.withOpacity(0.18)),
-      ),
       child: Row(
         children: [
           SizedBox(
@@ -723,7 +801,7 @@ class _BusyBanner extends StatelessWidget {
             child: Text(
               message,
               style: GoogleFonts.manrope(
-                color: const Color(0xFF062A3A),
+                color: context.palette.textPrimary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -749,30 +827,21 @@ class _WorkspaceHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [accent.withOpacity(0.95), accent.withOpacity(0.72)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(28),
-        boxShadow: [
-          BoxShadow(
-            color: accent.withOpacity(0.22),
-            blurRadius: 24,
-            offset: const Offset(0, 12),
-          ),
-        ],
+    return AppCard(
+      accent: accent,
+      showBorder: false,
+      shadowOpacity: 0.22,
+      gradient: LinearGradient(
+        colors: [accent.withValues(alpha: 0.95), accent.withValues(alpha: 0.72)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           CircleAvatar(
             radius: 24,
-            backgroundColor: Colors.white.withOpacity(0.18),
+            backgroundColor: Colors.white.withValues(alpha: 0.18),
             child: Icon(
               role.icon,
               size: 24,
@@ -797,7 +866,7 @@ class _WorkspaceHeader extends StatelessWidget {
                 Text(
                   subtitle,
                   style: GoogleFonts.manrope(
-                    color: Colors.white.withOpacity(0.92),
+                    color: Colors.white.withValues(alpha: 0.92),
                     fontSize: 13,
                     height: 1.35,
                   ),
