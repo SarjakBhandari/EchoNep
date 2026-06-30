@@ -297,18 +297,18 @@ IconData _themeModeIcon(ThemeMode mode) {
 
 String _themeModeTooltip(ThemeMode mode) {
   return switch (mode) {
-    ThemeMode.system => 'Theme: system (tap for light)',
-    ThemeMode.light => 'Theme: light (tap for dark)',
-    ThemeMode.dark => 'Theme: dark (tap for system)',
+    ThemeMode.system => 'Theme: system ',
+    ThemeMode.light => 'Theme: light ',
+    ThemeMode.dark => 'Theme: dark ',
   };
 }
 
 class _TopBar extends StatelessWidget {
-  final UserRole role;
-  final Color accent;
   final ThemeMode themeMode;
   final VoidCallback? onReset;
   final VoidCallback onToggleTheme;
+  final UserRole role;
+  final Color accent;
 
   const _TopBar({
     required this.role,
