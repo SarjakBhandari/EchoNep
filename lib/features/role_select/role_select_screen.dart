@@ -62,7 +62,7 @@ class RoleSelectScreen extends ConsumerWidget {
                 _RoleCard(
                   title: 'I am a Tourist',
                   subtitle: 'English to Nepali',
-                  emoji: '🌏',
+                  icon: UserRole.tourist.icon,
                   accentColor: const Color(0xFF0B6E99),
                   onTap: () =>
                       ref.read(roleProvider.notifier).setRole(UserRole.tourist),
@@ -71,7 +71,7 @@ class RoleSelectScreen extends ConsumerWidget {
                 _RoleCard(
                   title: 'म व्यापारी हुँ',
                   subtitle: 'नेपाली to English',
-                  emoji: '🏪',
+                  icon: UserRole.trader.icon,
                   accentColor: const Color(0xFFB85C38),
                   onTap: () =>
                       ref.read(roleProvider.notifier).setRole(UserRole.trader),
@@ -89,14 +89,14 @@ class RoleSelectScreen extends ConsumerWidget {
 class _RoleCard extends StatefulWidget {
   final String title;
   final String subtitle;
-  final String emoji;
+  final IconData icon;
   final Color accentColor;
   final VoidCallback onTap;
 
   const _RoleCard({
     required this.title,
     required this.subtitle,
-    required this.emoji,
+    required this.icon,
     required this.accentColor,
     required this.onTap,
   });
@@ -138,7 +138,7 @@ class _RoleCardState extends State<_RoleCard> {
               CircleAvatar(
                 radius: 28,
                 backgroundColor: widget.accentColor.withValues(alpha: 0.12),
-                child: Text(widget.emoji, style: const TextStyle(fontSize: 26)),
+                child: Icon(widget.icon, size: 26, color: widget.accentColor),
               ),
               const SizedBox(width: 16),
               Expanded(
