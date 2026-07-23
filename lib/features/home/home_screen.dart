@@ -38,9 +38,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String? _recordingPath;
   bool _isRecording = false;
   bool _isBusy = false;
-  Timer? _recordingTimer;
+  Timer? _countdownTimer;
+  int _recordingSecondsLeft = 0;
+  String _pipelineStep = '';
 
-  static const _maxRecordingSeconds = 45;
+  static const _maxRecordingSeconds = 30;
 
   Color get _accent => widget.role == UserRole.tourist
       ? const Color(0xFF0B6E99)
@@ -50,7 +52,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   void dispose() {
-    _recordingTimer?.cancel();
+    _countdownTimer?.cancel();
     _recorder.dispose();
     _player.dispose();
     _sourceController.dispose();
@@ -72,6 +74,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     HapticFeedback.lightImpact();
     setState(() {
       _isBusy = true;
+      _pipelineStep = 'Translating...';
     });
     try {
       await ref
@@ -85,6 +88,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (mounted) {
         setState(() {
           _isBusy = false;
+          _pipelineStep = '';
         });
       }
     }
@@ -117,26 +121,40 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     HapticFeedback.mediumImpact();
     setState(() {
       _isRecording = true;
+      _recordingSecondsLeft = _maxRecordingSeconds;
+      _pipelineStep = 'Listening...';
     });
 
-    _recordingTimer = Timer(
-      const Duration(seconds: _maxRecordingSeconds),
-      _stopRecordingAndTranslate,
-    );
+    _countdownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+      setState(() {
+        _recordingSecondsLeft--;
+      });
+      if (_recordingSecondsLeft <= 0) {
+        timer.cancel();
+        _stopRecordingAndTranslate();
+      }
+    });
   }
 
   Future<void> _stopRecordingAndTranslate() async {
     if (_isBusy) return;
-    _recordingTimer?.cancel();
-    _recordingTimer = null;
+    _countdownTimer?.cancel();
+    _countdownTimer = null;
     setState(() {
       _isBusy = true;
+      _recordingSecondsLeft = 0;
+      _pipelineStep = 'Processing audio...';
     });
     try {
       final path = await _recorder.stop();
       if (mounted) {
         setState(() {
           _isRecording = false;
+          _pipelineStep = 'Transcribing speech...';
         });
       }
 
@@ -176,6 +194,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (mounted) {
         setState(() {
           _isBusy = false;
+          _pipelineStep = '';
         });
       }
     }
@@ -224,6 +243,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 onToggleTheme: () =>
                     ref.read(themeModeProvider.notifier).cycleThemeMode(),
               ),
+              AnimatedSize(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                child: SizedBox(
+                  height: (_isBusy || translationState.isLoading) ? 3.0 : 0.0,
+                  child: LinearProgressIndicator(
+                    color: _isRecording ? Colors.red.shade400 : _accent,
+                    backgroundColor: (_isRecording ? Colors.red : _accent)
+                        .withValues(alpha: 0.12),
+                  ),
+                ),
+              ),
               Expanded(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
@@ -258,9 +289,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       const SizedBox(height: 12),
                       if (translationState.isLoading || _isBusy)
                         _BusyBanner(
-                          message: _isRecording
-                              ? 'Listening and transcribing...'
-                              : 'Contacting server...',
+                          message: _pipelineStep.isEmpty
+                              ? (_isRecording ? 'Listening...' : 'Processing...')
+                              : _pipelineStep,
                           accent: _accent,
                         ),
                       if (translationState.error != null)
@@ -268,15 +299,36 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                           message: translationState.error!,
                           color: palette.errorColor,
                         ),
-                      if (translationState.result != null) ...[
-                        const SizedBox(height: 8),
-                        _ResultCard(
-                          accent: _accent,
-                          role: widget.role,
-                          result: translationState.result!,
-                          onPlay: _playAudio,
+                      AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 300),
+                        switchInCurve: Curves.easeOutCubic,
+                        switchOutCurve: Curves.easeIn,
+                        transitionBuilder: (child, animation) => FadeTransition(
+                          opacity: animation,
+                          child: SlideTransition(
+                            position: Tween<Offset>(
+                              begin: const Offset(0, 0.06),
+                              end: Offset.zero,
+                            ).animate(animation),
+                            child: child,
+                          ),
                         ),
-                      ],
+                        child: translationState.result != null
+                            ? Column(
+                                key: ValueKey(translationState.result!.translatedText),
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const SizedBox(height: 8),
+                                  _ResultCard(
+                                    accent: _accent,
+                                    role: widget.role,
+                                    result: translationState.result!,
+                                    onPlay: _playAudio,
+                                  ),
+                                ],
+                              )
+                            : const SizedBox.shrink(key: ValueKey('empty')),
+                      ),
                     ],
                   ),
                 ),
@@ -284,6 +336,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               _MicBar(
                 accent: _accent,
                 isRecording: _isRecording,
+                secondsLeft: _recordingSecondsLeft,
+                maxSeconds: _maxRecordingSeconds,
                 enabled: !_isBusy,
                 label: widget.role.prompt,
                 hint: _isTrader
@@ -524,7 +578,7 @@ class _QuickPhraseStrip extends StatelessWidget {
             itemBuilder: (context, index) {
               final phrase = phrases[index];
               final label = role == UserRole.tourist ? phrase.english : phrase.nepali;
-              return GestureDetector(
+              return _PressableWidget(
                 onTap: enabled ? () => onPhraseTap(phrase) : null,
                 child: AnimatedOpacity(
                   opacity: enabled ? 1.0 : 0.5,
@@ -727,32 +781,54 @@ class _BusyBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AppCard(
-      accent: accent,
-      fillColor: accent.withValues(alpha: 0.07),
-      borderOpacity: 0.14,
-      radius: AppRadius.md,
-      withShadow: false,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      child: Row(
-        children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(strokeWidth: 2, color: accent),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(
-              message,
-              style: GoogleFonts.manrope(
-                color: context.palette.textPrimary,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
+    final palette = context.palette;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppRadius.md),
+      child: Container(
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: accent.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(AppRadius.md),
+          border: Border.all(color: accent.withValues(alpha: 0.14)),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+              child: Row(
+                children: [
+                  SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(strokeWidth: 2, color: accent),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 200),
+                      child: Text(
+                        message,
+                        key: ValueKey(message),
+                        style: GoogleFonts.manrope(
+                          color: palette.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-          ),
-        ],
+            LinearProgressIndicator(
+              minHeight: 3,
+              color: accent,
+              backgroundColor: accent.withValues(alpha: 0.10),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -993,6 +1069,8 @@ class _ResultCard extends StatelessWidget {
 class _MicBar extends StatefulWidget {
   final Color accent;
   final bool isRecording;
+  final int secondsLeft;
+  final int maxSeconds;
   final bool enabled;
   final String label;
   final String hint;
@@ -1001,6 +1079,8 @@ class _MicBar extends StatefulWidget {
   const _MicBar({
     required this.accent,
     required this.isRecording,
+    required this.secondsLeft,
+    required this.maxSeconds,
     required this.enabled,
     required this.label,
     required this.hint,
@@ -1069,7 +1149,7 @@ class _MicBarState extends State<_MicBar> with SingleTickerProviderStateMixin {
                       builder: (context, child) {
                         final t = _pulseController.value;
                         return Opacity(
-                          opacity: (1 - t) * 0.4,
+                          opacity: (1 - t) * 0.35,
                           child: Transform.scale(
                             scale: 1.0 + t * 0.65,
                             child: Container(
@@ -1084,10 +1164,23 @@ class _MicBarState extends State<_MicBar> with SingleTickerProviderStateMixin {
                         );
                       },
                     ),
+                  if (widget.isRecording)
+                    SizedBox(
+                      width: 96,
+                      height: 96,
+                      child: CircularProgressIndicator(
+                        value: widget.maxSeconds > 0
+                            ? widget.secondsLeft / widget.maxSeconds
+                            : 0,
+                        strokeWidth: 3,
+                        color: Colors.red.shade300,
+                        backgroundColor: Colors.red.withValues(alpha: 0.15),
+                      ),
+                    ),
                   AnimatedContainer(
                     duration: const Duration(milliseconds: 180),
-                    width: widget.isRecording ? 82 : 70,
-                    height: widget.isRecording ? 82 : 70,
+                    width: widget.isRecording ? 78 : 70,
+                    height: widget.isRecording ? 78 : 70,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       gradient: LinearGradient(
@@ -1108,17 +1201,56 @@ class _MicBarState extends State<_MicBar> with SingleTickerProviderStateMixin {
                         ),
                       ],
                     ),
-                    child: Icon(
-                      widget.isRecording ? Icons.stop_rounded : Icons.mic_rounded,
-                      color: Colors.white,
-                      size: 30,
-                    ),
+                    child: widget.isRecording
+                        ? Center(
+                            child: Text(
+                              '${widget.secondsLeft}',
+                              style: GoogleFonts.manrope(
+                                color: Colors.white,
+                                fontSize: 22,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          )
+                        : const Icon(Icons.mic_rounded, color: Colors.white, size: 30),
                   ),
                 ],
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _PressableWidget extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+
+  const _PressableWidget({required this.child, this.onTap});
+
+  @override
+  State<_PressableWidget> createState() => _PressableWidgetState();
+}
+
+class _PressableWidgetState extends State<_PressableWidget> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _pressed = true),
+      onTapUp: (_) {
+        setState(() => _pressed = false);
+        widget.onTap?.call();
+      },
+      onTapCancel: () => setState(() => _pressed = false),
+      child: AnimatedScale(
+        scale: _pressed ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 90),
+        curve: Curves.easeOut,
+        child: widget.child,
       ),
     );
   }
