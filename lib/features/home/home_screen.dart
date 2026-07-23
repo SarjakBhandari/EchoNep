@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -37,6 +38,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   String? _recordingPath;
   bool _isRecording = false;
   bool _isBusy = false;
+  Timer? _recordingTimer;
+
+  static const _maxRecordingSeconds = 45;
 
   Color get _accent => widget.role == UserRole.tourist
       ? const Color(0xFF0B6E99)
@@ -46,6 +50,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
   @override
   void dispose() {
+    _recordingTimer?.cancel();
     _recorder.dispose();
     _player.dispose();
     _sourceController.dispose();
@@ -113,10 +118,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     setState(() {
       _isRecording = true;
     });
+
+    _recordingTimer = Timer(
+      const Duration(seconds: _maxRecordingSeconds),
+      _stopRecordingAndTranslate,
+    );
   }
 
   Future<void> _stopRecordingAndTranslate() async {
     if (_isBusy) return;
+    _recordingTimer?.cancel();
+    _recordingTimer = null;
     setState(() {
       _isBusy = true;
     });
