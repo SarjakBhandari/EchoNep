@@ -287,10 +287,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Top bar
-// ---------------------------------------------------------------------------
-
 IconData _themeModeIcon(ThemeMode mode) {
   return switch (mode) {
     ThemeMode.system => Icons.brightness_auto_rounded,
@@ -370,10 +366,6 @@ class _TopBar extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Workspace header
-// ---------------------------------------------------------------------------
 
 class _WorkspaceHeader extends StatelessWidget {
   final UserRole role;
@@ -459,10 +451,6 @@ class _WorkspaceHeader extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Quick phrase strip (horizontal scroll)
-// ---------------------------------------------------------------------------
 
 class _QuickPhraseStrip extends StatelessWidget {
   final UserRole role;
@@ -569,10 +557,6 @@ class _QuickPhraseStrip extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Composer card
-// ---------------------------------------------------------------------------
-
 class _ComposerCard extends StatelessWidget {
   final Color accent;
   final TextEditingController controller;
@@ -649,7 +633,7 @@ class _ComposerCard extends StatelessWidget {
             style: GoogleFonts.manrope(color: palette.textPrimary, fontSize: 15),
             decoration: InputDecoration(
               hintText: role == UserRole.trader
-                  ? 'उदाहरण: यो अन्तिम मूल्य हो'
+                  ? 'e.g. yo antim mulya ho (Nepali)'
                   : role.prompt,
               hintStyle: GoogleFonts.manrope(
                 color: palette.textSecondary.withValues(alpha: 0.6),
@@ -691,10 +675,6 @@ class _ComposerCard extends StatelessWidget {
   }
 }
 
-// ---------------------------------------------------------------------------
-// Status / error banner
-// ---------------------------------------------------------------------------
-
 class _StatusBanner extends StatelessWidget {
   final String message;
   final Color color;
@@ -726,10 +706,6 @@ class _StatusBanner extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Busy / loading banner
-// ---------------------------------------------------------------------------
 
 class _BusyBanner extends StatelessWidget {
   final String message;
@@ -769,10 +745,6 @@ class _BusyBanner extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Result card
-// ---------------------------------------------------------------------------
 
 class _LatencyChip extends StatelessWidget {
   final String label;
@@ -837,7 +809,6 @@ class _ResultCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header
             Container(
               padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
               decoration: BoxDecoration(
@@ -870,7 +841,6 @@ class _ResultCard extends StatelessWidget {
               ),
             ),
 
-            // Source text
             if (result.sourceText.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.fromLTRB(18, 14, 18, 0),
@@ -899,7 +869,6 @@ class _ResultCard extends StatelessWidget {
                 ),
               ),
 
-            // Divider with direction arrow
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
               child: Row(
@@ -922,7 +891,6 @@ class _ResultCard extends StatelessWidget {
               ),
             ),
 
-            // Translated text
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 0),
               child: Column(
@@ -965,7 +933,6 @@ class _ResultCard extends StatelessWidget {
 
             const SizedBox(height: 14),
 
-            // Play button + latency chips
             Padding(
               padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
               child: Row(
@@ -1010,10 +977,6 @@ class _ResultCard extends StatelessWidget {
     );
   }
 }
-
-// ---------------------------------------------------------------------------
-// Mic bar (bottom)
-// ---------------------------------------------------------------------------
 
 class _MicBar extends StatefulWidget {
   final Color accent;
